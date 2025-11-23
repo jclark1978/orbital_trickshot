@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Orbital Trickshot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ui">
+    <h1>Orbital Trickshot</h1>
+    <div class="panel">
+      <div class="status-row">
+        <span>Shots: <span id="shots">0</span></span>
+        <span>Stars: <span id="stars">0</span> / <span id="totalStars">0</span></span>
+        <span>Level: <span id="level">1</span></span>
+      </div>
+      <div class="status-row">
+        <button id="resetLevel">Reset Level</button>
+        <button id="nextLevel">Next Level</button>
+        <button id="randomize">Random System</button>
+      </div>
+      <p class="hint" id="hint">
+        Click and drag from the launcher to set your shot. Release to fire the puck. Curve around planets to collect all stars!
+      </p>
+    </div>
+  </div>
+  <div id="levelCompleteOverlay" class="overlay">
+    <div class="overlay-content">
+      <h2>Congratulations!</h2>
+      <p>You've collected all of the stars on this level.</p>
+      <button id="overlayNextLevel">Next Level</button>
+    </div>
+  </div>
+  <canvas id="game"></canvas>
+
+  <script src="main.js"></script>
+</body>
+</html>
