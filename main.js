@@ -6,6 +6,7 @@
   const starsEl = document.getElementById("stars");
   const totalStarsEl = document.getElementById("totalStars");
   const levelEl = document.getElementById("level");
+  const bestShotsEl = document.getElementById("bestShots");
   const hintEl = document.getElementById("hint");
   const overlayEl = document.getElementById("levelCompleteOverlay");
   const overlayNextBtn = document.getElementById("overlayNextLevel");
@@ -51,10 +52,12 @@
   let planets = [];
   let stars = [];
   let explosions = [];
+  const bestShotsByLevel = {};
   let shots = 0;
   let collectedStars = 0;
   let totalStars = 0;
   let levelIndex = 0;
+  let currentLevelName = "";
 
   let isDragging = false;
   let dragStart = null;
@@ -112,6 +115,33 @@
         { xFactor: 0.8, yFactor: 0.65 },
       ],
     },
+    {
+      name: "Tight Binary",
+      hint: "Aim between the twins; a late curve can catch both stars.",
+      planets: [
+        { xFactor: 0.48, yFactor: 0.48, mass: 11, radius: 30, spin: 0.28 },
+        { xFactor: 0.52, yFactor: 0.52, mass: 11, radius: 30, spin: -0.28 },
+      ],
+      stars: [
+        { xFactor: 0.75, yFactor: 0.38 },
+        { xFactor: 0.78, yFactor: 0.62 },
+      ],
+    },
+    {
+      name: "Gauntlet Run",
+      hint: "Use small slings to snake through the corridor.",
+      planets: [
+        { xFactor: 0.35, yFactor: 0.35, mass: 8, radius: 26, spin: 0.1 },
+        { xFactor: 0.42, yFactor: 0.6, mass: 9, radius: 28, spin: -0.1 },
+        { xFactor: 0.58, yFactor: 0.4, mass: 9, radius: 30, spin: 0.12 },
+        { xFactor: 0.66, yFactor: 0.62, mass: 10, radius: 32, spin: -0.14 },
+      ],
+      stars: [
+        { xFactor: 0.72, yFactor: 0.32 },
+        { xFactor: 0.82, yFactor: 0.48 },
+        { xFactor: 0.72, yFactor: 0.66 },
+      ],
+    },
   ];
 
   function createLevelFromConfig(config) {
@@ -137,7 +167,10 @@
     collectedStars = 0;
     totalStars = stars.length;
     totalStarsEl.textContent = totalStars;
-    levelEl.textContent = `${levelIndex + 1} – ${config.name}`;
+    currentLevelName = config.name;
+    levelEl.textContent = `${levelIndex + 1} – ${currentLevelName}`;
+    const best = bestShotsByLevel[currentLevelName];
+    bestShotsEl.textContent = Number.isFinite(best) ? best : "–";
     hintEl.textContent =
       config.hint +
       " Tip: Longer drags = faster shots, but too fast can escape gravity.";
@@ -223,6 +256,18 @@
     shotsEl.textContent = shots;
   }
 
+  function getDragPreview(targetX, targetY) {
+    const dx = targetX - launcher.x;
+    const dy = targetY - launcher.y;
+    const maxDrag = Math.min(width, height) * 0.35;
+    const dragLength = Math.hypot(dx, dy);
+    const clamped = Math.min(maxDrag, dragLength);
+    const strength = clamped / maxDrag;
+    const speed = 160 + strength * 260;
+    const angle = Math.atan2(dy, dx);
+    return { angle, strength, speed };
+  }
+
   function updatePhysics(dt) {
     if (!puck.alive) return;
 
@@ -281,6 +326,12 @@
         collectedStars += 1;
         starsEl.textContent = collectedStars;
         if (collectedStars === totalStars) {
+          const levelName = currentLevelName || "Random System";
+          const best = bestShotsByLevel[levelName];
+          if (!best || shots < best) {
+            bestShotsByLevel[levelName] = shots;
+            bestShotsEl.textContent = shots;
+          }
           hintEl.textContent =
             "You collected all stars! Choose 'Next Level' to advance or 'Reset Level' to replay this level.";
           if (overlayEl) {
@@ -289,6 +340,51 @@
         }
       }
     }
+  }
+
+  function predictPath(angle, speed) {
+    const preview = [];
+    let px = launcher.x;
+    let py = launcher.y;
+    let pvx = Math.cos(angle) * speed;
+    let pvy = Math.sin(angle) * speed;
+    const damping = 0.999;
+    const steps = 80;
+    for (let i = 0; i < steps; i++) {
+      let ax = 0;
+      let ay = 0;
+      for (const planet of planets) {
+        const dx = planet.x - px;
+        const dy = planet.y - py;
+        const distSq = dx * dx + dy * dy;
+        const minDist = planet.radius + puck.radius + 6;
+        if (distSq < minDist * minDist) {
+          return preview;
+        }
+        const dist = Math.sqrt(distSq) + 0.0001;
+        const force = (G * planet.mass) / (distSq + 2800);
+        ax += (force * dx) / dist;
+        ay += (force * dy) / dist;
+      }
+      pvx += ax * TIME_STEP;
+      pvy += ay * TIME_STEP;
+      pvx *= damping;
+      pvy *= damping;
+      px += pvx * TIME_STEP;
+      py += pvy * TIME_STEP;
+      if (
+        px < -200 ||
+        px > width + 200 ||
+        py < -200 ||
+        py > height + 200
+      ) {
+        return preview;
+      }
+      if (i % 2 === 0) {
+        preview.push({ x: px, y: py });
+      }
+    }
+    return preview;
   }
 
   function drawBackground() {
@@ -495,15 +591,12 @@
     ctx.restore();
 
     if (isDragging && dragStart && dragCurrent) {
-      const dx = dragCurrent.x - dragStart.x;
-      const dy = dragCurrent.y - dragStart.y;
-      const dragLen = Math.hypot(dx, dy);
-      const maxDrag = Math.min(width, height) * 0.35;
-      const clamped = Math.min(maxDrag, dragLen);
-      const strength = clamped / maxDrag;
-
-      const angle = Math.atan2(dy, dx);
+      const { angle, strength, speed } = getDragPreview(
+        dragCurrent.x,
+        dragCurrent.y
+      );
       const guideLen = 70 + strength * 120;
+      const preview = predictPath(angle, speed);
 
       ctx.save();
       ctx.lineWidth = 2;
@@ -516,10 +609,35 @@
       );
       ctx.stroke();
 
+      ctx.setLineDash([6, 6]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(59,130,246,0.6)";
+      ctx.beginPath();
+      for (let i = 0; i < preview.length; i++) {
+        const p = preview[i];
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+
+      ctx.setLineDash([]);
       ctx.lineWidth = 5;
       ctx.globalAlpha = 0.45;
       ctx.beginPath();
       ctx.arc(launcher.x, launcher.y, launcher.radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "rgba(22,163,74,0.8)";
+      ctx.beginPath();
+      ctx.arc(
+        launcher.x,
+        launcher.y,
+        launcher.radius + 18,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * strength
+      );
       ctx.stroke();
       ctx.restore();
     }
@@ -594,6 +712,14 @@
     };
   }
 
+  function touchCoords(touch) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  }
+
   canvas.addEventListener("mousedown", (evt) => {
     const pos = canvasCoords(evt);
     const dx = pos.x - launcher.x;
@@ -620,6 +746,54 @@
   });
 
   canvas.addEventListener("mouseleave", () => {
+    isDragging = false;
+    dragCurrent = null;
+  });
+
+  canvas.addEventListener(
+    "touchstart",
+    (evt) => {
+      const touch = evt.touches[0];
+      if (!touch) return;
+      const pos = touchCoords(touch);
+      const dx = pos.x - launcher.x;
+      const dy = pos.y - launcher.y;
+      if (Math.hypot(dx, dy) <= launcher.radius + 30) {
+        isDragging = true;
+        dragStart = { x: launcher.x, y: launcher.y };
+        dragCurrent = { ...pos };
+      }
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (evt) => {
+      if (!isDragging) return;
+      const touch = evt.touches[0];
+      if (!touch) return;
+      dragCurrent = touchCoords(touch);
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener(
+    "touchend",
+    (evt) => {
+      if (!isDragging) return;
+      const touch = evt.changedTouches[0];
+      if (!touch) return;
+      const pos = touchCoords(touch);
+      isDragging = false;
+      dragCurrent = null;
+      firePuck(pos.x, pos.y);
+      starsEl.textContent = collectedStars;
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener("touchcancel", () => {
     isDragging = false;
     dragCurrent = null;
   });
