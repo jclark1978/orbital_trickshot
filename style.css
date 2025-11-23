@@ -24,9 +24,18 @@ body {
   backdrop-filter: blur(8px);
 }
 
+.ui.compact {
+  padding: 6px 10px 8px;
+}
+
 .ui h1 {
   font-size: 18px;
   margin-bottom: 6px;
+}
+
+.ui.compact h1,
+.ui.compact .hint {
+  display: none;
 }
 
 .panel {

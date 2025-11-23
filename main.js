@@ -8,6 +8,7 @@
   const levelEl = document.getElementById("level");
   const bestShotsEl = document.getElementById("bestShots");
   const hintEl = document.getElementById("hint");
+  const uiPanel = document.getElementById("uiPanel");
   const overlayEl = document.getElementById("levelCompleteOverlay");
   const overlayNextBtn = document.getElementById("overlayNextLevel");
 
@@ -174,6 +175,10 @@
     hintEl.textContent =
       config.hint +
       " Tip: Longer drags = faster shots, but too fast can escape gravity.";
+    if (uiPanel) {
+      if (levelIndex === 0) uiPanel.classList.remove("compact");
+      else uiPanel.classList.add("compact");
+    }
     resetPuck();
     requestRender();
   }
